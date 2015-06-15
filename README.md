@@ -10,8 +10,6 @@ SQLiteGlue provides the basic low-level functions necessary to use sqlite from a
 Java application over JNI (Java native interface). This is accomplished by using
 [GlueGen](http://jogamp.org/gluegen/www/) around a simple wrapper C module.
 
-TBD API & some internal details
-
 **NOTE:** This project references the `gluegentools` & `sqlite-amalgamation` subproject, which are resolved by: $ `make init`
 
 # Building
@@ -32,11 +30,13 @@ $ `make regen`
 
 # Basics
 
-## Structure
+## Java API Structure
 
 There is a single `org.sqlg.SQLiteGlue` object that provides the sqlite accessor functions as static native functions.
 
 ## Usage
+
+### Open and close a database
 
 To open a database:
 
@@ -65,10 +65,13 @@ To close the database handle:
 org.sqlg.SQLiteGlue.sqlg_db_close(dbhandle);
 ```
 
+### Prepare and run statements
+
 To prepare a statement with no parameters (on Android):
 
 ```Java
-long sthandle = org.sqlg.SQLiteGlue.sqlg_db_prepare_st(dbhandle, "select upper('How about some ascii text?') as caps");
+long sthandle = org.sqlg.SQLiteGlue.sqlg_db_prepare_st(dbhandle,
+    "CREATE TABLE mytable (text1 TEXT, num1 INTEGER, num2 INTEGER, real1 REAL)");
 
 if (sthandle < 0) {
     android.util.Log.e("MySQLiteApp", "prepare statement error: " + -sthandle);
@@ -79,8 +82,99 @@ if (sthandle < 0) {
 
 **WARNING:** Again, if you use a negative statement handle in other `SQLiteGlue` functions the behavior is undefined.
 
-TBD ...
+To run the statement with no results expected:
 
+```Java
+int stresult = org.sqlg.SQLiteGlue.sqlg_st_step(sthandle);
+if (stresult != org.sqlg.SQLiteGlue.SQLG_RESULT_DONE) {
+    android.util.Log.e("MySQLiteApp", "unexpected step result: " + stresult);
+    org.sqlg.SQLiteGlue.sqlg_st_finish(sthandle);
+    org.sqlg.SQLiteGlue.sqlg_db_close(dbhandle);
+    return;
+}
+```
+
+**NOTE:** In the case of operations on existing sqlite statements the returned sqlite result is a positive value.
+
+And to cleanup the statement handle:
+
+
+```Java
+org.sqlg.SQLiteGlue.sqlg_st_finish(sthandle);
+```
+
+To prepare an INSERT or UPDATE statement and programmaticallly bind some parameter values:
+
+```Java
+long sthandle = org.sqlg.SQLiteGlue.sqlg_db_prepare_st(dbhandle,
+    "INSERT INTO mytable (text1, num1, num2, real1) VALUES (?,?,?,?)");
+
+if (sthandle < 0) {
+    android.util.Log.e("MySQLiteApp", "prepare statement error: " + -sthandle);
+    org.sqlg.SQLiteGlue.sqlg_db_close(dbhandle);
+    return;
+}
+
+org.sqlg.SQLiteGlue.sqlg_st_bind_text_native(sthandle, 1, "test");
+org.sqlg.SQLiteGlue.sqlg_st_bind_int(sthandle, 2, 10100);
+org.sqlg.SQLiteGlue.sqlg_st_bind_long(sthandle, 3, 0x1230000abcdL);
+org.sqlg.SQLiteGlue.sqlg_st_bind_double(sthandle, 4, 123456.789);
+```
+
+Then run the statement and clean it up as described above.
+
+### Get row results
+
+First, prepare the query statement:
+
+```Java
+
+long sthandle = org.sqlg.SQLiteGlue.sqlg_db_prepare_st(dbhandle, "SELECT text1, num1, num2, real1 FROM mytable;");
+if (sthandle < 0) {
+    android.util.Log.e("MySQLiteApp", "prepare statement error: " + -sthandle);
+    org.sqlg.SQLiteGlue.sqlg_db_close(dbhandle);
+    return;
+}
+```
+
+Then to step through the result rows:
+
+```Java
+int stresult = org.sqlg.SQLiteGlue.sqlg_st_step(sthandle);
+
+while (stresult == org.sqlg.SQLiteGlue.SQLG_RESULT_ROW) {
+    int colcount = org.sqlg.SQLiteGlue.sqlg_st_column_count(sthandle);
+    android.util.Log.e("MySQLiteApp", "Row with " + colcount + " columns");
+
+    for (int i=0; i<colcount; ++i) {
+        int coltype = SQLiteGlue.sqlg_st_column_type(sthandle, i);
+        switch(coltype) {
+        case org.sqlg.SQLiteGlue.SQLG_INTEGER:
+            android.util.Log.e("MySQLiteApp",
+                "Col " + i + " type: INTEGER (long) value: 0x" +
+                    java.lang.Long.toHexString(org.sqlg.SQLiteGlue.sqlg_st_column_long(sthandle, i)));
+            break;
+
+        case org.sqlg.SQLiteGlue.SQLG_FLOAT:
+            android.util.Log.e("MySQLiteApp",
+                "Col " + i + " type: FLOAT value: " + org.sqlg.SQLiteGlue.sqlg_st_column_double(sthandle, i));
+            break;
+
+        case org.sqlg.SQLiteGlue.SQLG_NULL:
+            android.util.Log.e("MySQLiteApp", "Col " + i + " type: NULL (no value)");
+            break;
+
+        default:
+            android.util.Log.e("MySQLiteApp",
+                "Col " + i + " type: " + ((coltype == org.sqlg.SQLiteGlue.SQLG_BLOB) ? "BLOB" : "TEXT") +
+                    " value: " + org.sqlg.SQLiteGlue.sqlg_st_column_text_native(sthandle, i));
+            break;
+        }
+    }
+
+    stresult = org.sqlg.SQLiteGlue.sqlg_st_step(sthandle);
+}
+```
 
 # Adaptations & extensions
 

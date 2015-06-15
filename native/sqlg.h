@@ -9,7 +9,7 @@
 #define SQLG_OPEN_SHAREDCACHE   0x20000
 #define SQLG_OPEN_PRIVATECACHE  0x40000
 
-/* And export some important sqlite result codes to the Java interface: */
+/* some important sqlite result codes to the Java interface: */
 #define SQLG_RESULT_OK          0
 #define SQLG_RESULT_ERROR       1
 #define SQLG_RESULT_INTERNAL    2
@@ -20,6 +20,13 @@
 /* TBD ... */
 #define SQLG_RESULT_ROW         100
 #define SQLG_RESULT_DONE        101
+
+/* and sqlite datatypes: */
+#define SQLG_INTEGER    1
+#define SQLG_FLOAT      2
+#define SQLG_TEXT       3
+#define SQLG_BLOB       4
+#define SQLG_NULL       5
 
 /* Could not easily get int64_t from stddef.h for gluegen */
 typedef long long sqlg_long_t;
