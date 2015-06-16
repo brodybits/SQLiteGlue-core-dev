@@ -1,4 +1,4 @@
-# SQLiteGlue
+# SQLiteGlue-core
 
 Low-level Android &amp; other Java native glue interface to sqlite using Gluegen.
 
@@ -10,13 +10,21 @@ SQLiteGlue provides the basic low-level functions necessary to use sqlite from a
 Java application over JNI (Java native interface). This is accomplished by using
 [GlueGen](http://jogamp.org/gluegen/www/) around a simple wrapper C module.
 
-**NOTE:** This project references the `gluegentools` & `sqlite-amalgamation` subproject, which are resolved by: $ `make init`
+This project is meant to help build a higher-level sqlite interface library, with the JNI layer completely isolated.
+
+## How
+
+All constants and sqlite accessor functions are defined in `native/sqlg.h`. The `make regen` rule uses [GlueGen](http://jogamp.org/gluegen/www/) (referenced in a subproject) to (re)generate the following files which _are_ committed and maintained in this repository:
+- `java/org/sqlg/SQLiteGlue.java` - provides the single `org.sqlg.SQLiteGlue` object that exports the static native sqlite accessor functions and some constants that may be helpful
+- ...
+
+TBD how to install and use.
 
 # Building
 
 ## Normal build
 
-Initialize with subprojects:
+*First* initialize with the `gluegentools` & `sqlite-amalgamation` subprojects:
 
 $ `make init`
 
@@ -28,15 +36,13 @@ $ `make`
 
 $ `make regen`
 
-# Basics
+# Usage
 
 ## Java API Structure
 
 There is a single `org.sqlg.SQLiteGlue` object that provides the sqlite accessor functions as static native functions.
 
-## Usage
-
-### Open and close a database
+## Open and close a database
 
 To open a database:
 
@@ -46,7 +52,7 @@ long dbhandle = org.sqlg.SQLiteGlue.sqlg_db_open(fullFilePath, openFlags);
 where `fullFilePath` is the _string_ path to the file and `openFlags` is the combination of flags used to open the file (using `sqlite3_open_v2()`). The result in `dbhandle` is the `long` handle that can be used to access the database if positive, or the negative value of the sqlite error code returned if negative. Here is an example (from an Android Activity function):
 
 ```Java
-java.io.File dbfile = new java.io.File(this.getFilesDir(), "DB.db");
+java.io.File dbfile = new java.io.File(this.getFilesDir(), "my.db");
 
 long dbhandle = org.sqlg.SQLiteGlue.sqlg_db_open(dbfile.getAbsolutePath(),
     org.sqlg.SQLiteGlue.SQLG_OPEN_READWRITE | org.sqlg.SQLiteGlue.SQLG_OPEN_CREATE);
@@ -65,7 +71,7 @@ To close the database handle:
 org.sqlg.SQLiteGlue.sqlg_db_close(dbhandle);
 ```
 
-### Prepare and run statements
+## Prepare and run statements
 
 To prepare a statement with no parameters (on Android):
 
@@ -123,7 +129,7 @@ org.sqlg.SQLiteGlue.sqlg_st_bind_double(sthandle, 4, 123456.789);
 
 Then run the statement and clean it up as described above.
 
-### Get row results
+## Get row results
 
 First, prepare the query statement:
 
@@ -176,7 +182,11 @@ while (stresult == org.sqlg.SQLiteGlue.SQLG_RESULT_ROW) {
 }
 ```
 
-# Adaptations & extensions
+Yes, this code was actually tested.
 
-TBD
+# Under the hood
+
+## Defining the API
+
+All constants and sqlite accessor functions are defined in `native/sqlg.h`. The `make regen` rule uses [GlueGen](http://jogamp.org/gluegen/www/) (referenced in a subproject) to regenerate `java/org/sqlg/SQLiteGlue.java`
 
