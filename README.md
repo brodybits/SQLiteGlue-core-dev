@@ -10,15 +10,22 @@ SQLiteGlue provides the basic low-level functions necessary to use sqlite from a
 Java application over JNI (Java native interface). This is accomplished by using
 [GlueGen](http://jogamp.org/gluegen/www/) around a simple wrapper C module.
 
-This project is meant to help build a higher-level sqlite interface library, with the JNI layer completely isolated.
+This project is meant to help build a higher-level sqlite interface library, with the JNI layer completely isolated and may be embedded with the package name changed.
+
+**WARNING:** The sqlite database and statement handles that are returned by the `SQLiteGlue` library functions are raw C pointer values (with `0x100000000` added). If someone uses a sqlite database or statement handle that is not valid, or no longer valid with the `SQLiteGlue` library the behavior is undefined (typically a crash that cannot be recovered). It is _recommended_ to use this project with a higher-level class library that can handle API misuse more gracefully.
 
 ## How
 
 All constants and sqlite accessor functions are defined in `native/sqlg.h`. The `make regen` rule uses [GlueGen](http://jogamp.org/gluegen/www/) (referenced in a subproject) to (re)generate the following files which _are_ committed and maintained in this repository:
 - `java/org/sqlg/SQLiteGlue.java` - provides the single `org.sqlg.SQLiteGlue` object that exports the static native sqlite accessor functions and some constants that may be helpful
-- ...
+- `native/SQLiteGlue_JNI.c` - C code that implements the native Java functions that call the functinos defined in `native/sqlg.h`
 
-TBD how to install and use.
+Other C modules:
+- `native/sqlg.c` - implement the C functions defined in `native/sqlg.h`
+- `sqlite-amalgamation/sqlite3.c` - sqlite amalgamation
+- `native/sqlg_all.c` - includes the other C modules for easy build
+
+TBD more on how it internally works below
 
 # Building
 
@@ -38,9 +45,24 @@ $ `make regen`
 
 # Usage
 
+## Installation
+
+Incude `java/org/sqlg/SQLiteGlue.java` in your Java source code.
+
+Include the contents of the `libs` subdirectory in your installation package. For Android, simply include the contents of `libs` in the `libs` subdirectory of your Android project.
+
 ## Java API Structure
 
 There is a single `org.sqlg.SQLiteGlue` object that provides the sqlite accessor functions as static native functions.
+
+## To load the native library
+
+```Java
+static
+{
+    System.loadLibrary("sqlg");
+}
+```
 
 ## Open and close a database
 
@@ -186,7 +208,22 @@ Yes, this code was actually tested.
 
 # Under the hood
 
-## Defining the API
+## sqlite database and statement handles
 
-All constants and sqlite accessor functions are defined in `native/sqlg.h`. The `make regen` rule uses [GlueGen](http://jogamp.org/gluegen/www/) (referenced in a subproject) to regenerate `java/org/sqlg/SQLiteGlue.java`
+The original design was for the C functions to return the sqlite database pointer (`sqlite3 *`) and statement pointer (`sqlite3_stmt *s`) by first converting them to `ptrdiff_t` (by converting to `unsigned char *` and subtracting `(unsigned char *)NULL`). Since `ptrdiff_t` is both a _signed_ integer and is supposed to be big enough to store any valid pointer difference, the trick is that in case of an error, it would be possible to return the negated sqlite error code in case of a problem.
+
+However, both the Android NDK code and Gluegen interpret `ptrdiff_t` as a 32-bit integer, and on newer versions of Android the addresses would exceed `0x7fffffff`, causing this design to break.
+
+The sqlite database and statement pointers are _now_ returned as long handle values in order to solve this problem, with `0x100000000` added to be absolutely sure that these will be positive values.
+
+## SQLiteGlue.cfg
+
+`SQLiteGlue.cfg` defines the following:
+- [GlueGen](http://jogamp.org/gluegen/www/) interface style: `AllStatic` - interface using static functions only
+- Java package (`org.sqlg`)
+- Generated Java class name (`SQLiteGlue`)
+- String handling
+- Output directories
+
+See the [GlueGen documentation](http://jogamp.org/gluegen/www/) for more information.
 
